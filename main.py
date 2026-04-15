@@ -32,22 +32,25 @@ def save_seen_posts(seen_set):
     with open(DATA_FILE, "w") as f: json.dump(list(seen_set), f)
 
 def clean_fb_url(url):
-    """Refined URL cleaner that handles Marketplace/Commerce IDs."""
+    """
+    Strips group-specific data to ensure the same post 
+    shared in multiple groups is only detected once.
+    """
     if not url: return None
     
-    # Handle /commerce/listing/ (Marketplace shares)
     if "/commerce/listing/" in url:
-        # Keep the base listing URL and the ID, discard everything after '?'
+        match = re.search(r"listing/(\d+)", url)
+        if match:
+            return f"https://www.facebook.com/commerce/listing/{match.group(1)}/"
         return url.split('?')[0].rstrip('/')
 
-    # Handle /photo/ posts
-    if "/photo/" in url:
-        match = re.search(r"(fbid=\d+&set=gm\.\d+)", url)
+    if "/photo/" in url or "/photo.php" in url:
+        match = re.search(r"fbid=(\d+)", url)
         if match:
-            return f"https://www.facebook.com/photo/?{match.group(1)}"
+            # We ignore the 'set=gm.123' part because that is group-specific
+            return f"https://www.facebook.com/photo/?fbid={match.group(1)}"
         return url.split('&')[0]
-        
-    # Standard posts
+    
     return url.split('?')[0].rstrip('/')
 
 async def run_monitor():
@@ -74,15 +77,10 @@ async def run_monitor():
                         await page.wait_for_selector('div[role="feed"]', timeout=15000)
                     except:
                         continue
-
-                    # Essential for rendering Commerce cards which load slowly
-                    await page.mouse.wheel(0, 1500)
-                    await page.wait_for_timeout(3000)
-
-                    posts = await page.query_selector_all('div[role="feed"] > div')
+                    all_elements = await page.query_selector_all('div[role="feed"] > div')
+                    posts = all_elements[:10] 
 
                     for post in posts:
-                        # Added /commerce/listing/ to the selector
                         link_elem = await post.query_selector(
                             'a[href*="/posts/"], a[href*="/permalink/"], a[href*="/photo/"], a[href*="/commerce/listing/"]'
                         )
@@ -91,7 +89,6 @@ async def run_monitor():
                             continue
                             
                         raw_url = await link_elem.get_attribute("href")
-                        # Fix for relative URLs
                         if raw_url and raw_url.startswith('/'):
                             raw_url = f"https://www.facebook.com{raw_url}"
                             
