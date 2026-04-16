@@ -69,7 +69,7 @@ async def run_monitor():
                     except:
                         continue
                     all_elements = await page.query_selector_all('div[role="feed"] > div')
-                    posts = all_elements[:10] 
+                    posts = all_elements[:20] 
 
                     for post in posts:
                         link_elem = await post.query_selector('a[href*="/posts/"], a[href*="/permalink/"]')
