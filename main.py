@@ -32,25 +32,16 @@ def save_seen_posts(seen_set):
     with open(DATA_FILE, "w") as f: json.dump(list(seen_set), f)
 
 def clean_fb_url(url):
-    """
-    Strips group-specific data to ensure the same post 
-    shared in multiple groups is only detected once.
-    """
     if not url: return None
     
     if "/commerce/listing/" in url:
         match = re.search(r"listing/(\d+)", url)
-        if match:
-            return f"https://www.facebook.com/commerce/listing/{match.group(1)}/"
-        return url.split('?')[0].rstrip('/')
+        return f"https://www.facebook.com/commerce/listing/{match.group(1)}/" if match else url.split('?')[0]
 
-    if "/photo/" in url or "/photo.php" in url:
+    if "/photo" in url:
         match = re.search(r"fbid=(\d+)", url)
-        if match:
-            # We ignore the 'set=gm.123' part because that is group-specific
-            return f"https://www.facebook.com/photo/?fbid={match.group(1)}"
-        return url.split('&')[0]
-    
+        return f"https://www.facebook.com/photo/?fbid={match.group(1)}" if match else url.split('&')[0]
+        
     return url.split('?')[0].rstrip('/')
 
 async def run_monitor():
@@ -81,14 +72,19 @@ async def run_monitor():
                     posts = all_elements[:10] 
 
                     for post in posts:
-                        link_elem = await post.query_selector(
-                            'a[href*="/posts/"], a[href*="/permalink/"], a[href*="/photo/"], a[href*="/commerce/listing/"]'
-                        )
+                        link_elem = await post.query_selector('a[href*="/posts/"], a[href*="/permalink/"]')
                         
+                        if not link_elem:
+                            link_elem = await post.query_selector('a[href*="/commerce/listing/"]')
+                            
+                        if not link_elem:
+                            link_elem = await post.query_selector('a[href*="/photo/"]')
+
                         if not link_elem:
                             continue
                             
                         raw_url = await link_elem.get_attribute("href")
+                        
                         if raw_url and raw_url.startswith('/'):
                             raw_url = f"https://www.facebook.com{raw_url}"
                             
