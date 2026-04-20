@@ -49,7 +49,7 @@ async def run_monitor():
     async with async_playwright() as p:
         context = await p.chromium.launch_persistent_context(
             user_data_dir=SESSION_DIR,
-            headless=False,
+            headless=True,
             user_agent=USER_AGENT,
             viewport={'width': 1280, 'height': 1080}
         )
